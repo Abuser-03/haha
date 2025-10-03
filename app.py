@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from datetime import datetime
 import os
 import json
@@ -12,7 +13,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-
+migrate = Migrate(app, db)
 
 # ========== МОДЕЛИ ==========
 
@@ -94,8 +95,8 @@ class DetectedError(db.Model):
     bbox_width = db.Column(db.Integer)
     bbox_height = db.Column(db.Integer)
 
-    # Дополнительные данные (JSON)
-    metadata = db.Column(db.Text)  # JSON с доп. информацией
+    # Дополнительные данные (JSON) - ПЕРЕИМЕНОВАНО!
+    extra_data = db.Column(db.Text)  # JSON с доп. информацией
 
     # Статус
     is_fixed = db.Column(db.Boolean, default=False)
@@ -120,7 +121,7 @@ class DetectedError(db.Model):
                 'height': self.bbox_height
             } if self.bbox_x is not None else None,
             'is_fixed': self.is_fixed,
-            'metadata': json.loads(self.metadata) if self.metadata else None
+            'extra_data': json.loads(self.extra_data) if self.extra_data else None
         }
 
 
@@ -235,7 +236,7 @@ def analyze_file(file_id):
                 bbox_y=err['bbox']['y'],
                 bbox_width=err['bbox']['width'],
                 bbox_height=err['bbox']['height'],
-                metadata=json.dumps({'confidence': 0.95})
+                extra_data=json.dumps({'confidence': 0.95})  # ИЗМЕНЕНО!
             )
             db.session.add(detected_error)
             severity_counts[err['severity']] += 1

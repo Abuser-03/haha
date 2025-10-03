@@ -2,6 +2,9 @@ from GOSTErrorDetector import GOSTErrorDetector
 import os
 from pdf2image import convert_from_path
 
+from utils import convert_pdfs_to_images
+
+
 def main_pipeline(pdf_folder):
     """
     Полный пайплайн обработки чертежей
