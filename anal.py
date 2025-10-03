@@ -2,43 +2,42 @@ import cv2
 import numpy as np
 from pdf2image import convert_from_path
 import pytesseract
+import config
 
-# Укажи пути
-poppler_path = '/opt/homebrew/bin'
-pytesseract.pytesseract.tesseract_cmd = '/opt/homebrew/bin/tesseract'
-
-# Конвертация PDF
+# Используем пути из config
+pytesseract.pytesseract.tesseract_cmd = config.TESSERACT_CMD
 
 
-pages = convert_from_path('document.pdf', dpi=200, poppler_path=poppler_path)
-image = np.array(pages[0])
+def analyze_document(pdf_path):
+    """Анализ документа"""
+    pages = convert_from_path(
+        pdf_path,
+        dpi=config.PDF_DPI,
+        poppler_path=config.POPPLER_PATH
+    )
 
-# Вырезаем правый нижний угол (например, 1/4 от ширины и высоты)
-h, w, _ = image.shape
-crop = image[int(h*0.75):, int(w*0.75):]
+    image = np.array(pages[0])
+    h, w, _ = image.shape
+    crop = image[int(h * 0.75):, int(w * 0.75):]
 
-# Копия для визуализации
-vis = crop.copy()
+    vis = crop.copy()
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
 
-# Преобразуем в оттенки серого
-gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
 
-# Используем OCR для определения текста
-data = pytesseract.image_to_data(gray, output_type=pytesseract.Output.DICT)
+    for i in range(len(data['text'])):
+        if int(data['conf'][i]) > 0:
+            (x, y, w_box, h_box) = (
+                data['left'][i],
+                data['top'][i],
+                data['width'][i],
+                data['height'][i]
+            )
+            cv2.rectangle(vis, (x, y), (x + w_box, y + h_box), (0, 255, 0), 2)
 
-# Проходим по результатам OCR и выделяем текст
-n_boxes = len(data['text'])
-for i in range(n_boxes):
-    if int(data['conf'][i]) > 0:  # уверенность > 0
-        (x, y, w_box, h_box) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-        cv2.rectangle(vis, (x, y), (x + w_box, y + h_box), (0, 255, 0), 2)
+    text = pytesseract.image_to_string(gray, lang='rus')
 
-# Показываем результат
-cv2.imshow("Text regions in bottom-right corner", vis)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-# Извлекаем текст
-text = pytesseract.image_to_string(gray)
-print("Извлеченный текст из правого нижнего угла:")
-print(text)
+    return {
+        'text': text,
+        'visualization': vis
+    }
