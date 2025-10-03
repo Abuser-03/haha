@@ -1,3 +1,9 @@
+import cv2
+import numpy as np
+import easyocr
+from ultralytics import YOLO
+
+
 class GOSTErrorDetector:
     def __init__(self):
         # 1. Детектор объектов (YOLOv8)

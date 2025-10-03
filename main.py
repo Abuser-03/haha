@@ -1,5 +1,6 @@
 from GOSTErrorDetector import GOSTErrorDetector
-
+import os
+from pdf2image import convert_from_path
 
 def main_pipeline(pdf_folder):
     """

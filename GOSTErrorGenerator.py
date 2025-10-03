@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
-
+import random
 
 class GOSTErrorGenerator:
     """Генератор ошибок согласно вашим требованиям"""
