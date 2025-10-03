@@ -23,7 +23,11 @@ database.db
 
 # Uploads
 uploads/
-
+temp/
+models/
+dataset_errors/
+converted_images/
+migrations/
 # OS
 .DS_Store
 Thumbs.db
