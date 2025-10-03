@@ -1,0 +1,23 @@
+# data.yaml - конфигурация датасета для YOLOv8
+
+# Абсолютный путь к датасету
+path: /Users/georgewashington/PycharmProjects/hackaton/data/dataset
+
+# Относительные пути от path
+train: train/images
+val: val/images
+
+# Количество классов
+nc: 9
+
+# Названия классов (из ERRORS_TAXONOMY.py)
+names:
+  0: missing_stamp
+  1: wrong_document_code
+  2: code_name_mismatch
+  3: wrong_tt_position
+  4: missing_letter_designation
+  5: missing_asterisks
+  6: dimension_30deg_violation
+  7: missing_tolerance_arrow
+  8: missing_general_roughness

@@ -1,170 +1,136 @@
+# GOSTErrorDetector.py
 import cv2
 import numpy as np
-import easyocr
 from ultralytics import YOLO
+import os
 
 
 class GOSTErrorDetector:
-    def __init__(self):
-        # 1. Детектор объектов (YOLOv8)
-        self.object_detector = YOLO('yolov8n.pt')
+    def __init__(self, model_path='models/best.pt'):
+        """
+        Инициализация детектора с обученной моделью
+        """
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"❌ Модель не найдена: {model_path}\n"
+                f"💡 Обучите модель командой: python train_yolo.py"
+            )
 
-        # 2. OCR для текста (Tesseract/EasyOCR)
-        self.ocr_reader = easyocr.Reader(['ru', 'en'])
+        print(f"📥 Загрузка модели: {model_path}")
+        self.model = YOLO(model_path)
 
-        # 3. Классификатор для проверки штампа
-        self.stamp_classifier = self._load_stamp_classifier()
+        # Мапинг классов
+        self.class_to_error = {
+            0: {'type': 'missing_stamp', 'severity': 'critical',
+                'description': 'Отсутствует основная надпись'},
+            1: {'type': 'wrong_document_code', 'severity': 'high',
+                'description': 'Неправильный код документа'},
+            2: {'type': 'code_name_mismatch', 'severity': 'high',
+                'description': 'Несоответствие кода и наименования'},
+            3: {'type': 'wrong_tt_position', 'severity': 'medium',
+                'description': 'ТТ не над основной надписью'},
+            4: {'type': 'missing_letter_designation', 'severity': 'medium',
+                'description': 'Отсутствует буквенное обозначение'},
+            5: {'type': 'missing_asterisks', 'severity': 'low',
+                'description': 'Отсутствуют * на чертеже'},
+            6: {'type': 'dimension_30deg_violation', 'severity': 'medium',
+                'description': 'Размер в зоне 30° без полки'},
+            7: {'type': 'missing_tolerance_arrow', 'severity': 'high',
+                'description': 'Отсутствует стрелка в допуске'},
+            8: {'type': 'missing_general_roughness', 'severity': 'medium',
+                'description': 'Отсутствует √ в углу чертежа'}
+        }
 
-    def detect_errors(self, image_path):
-        """Комплексная проверка чертежа"""
-        image = cv2.imread(image_path)
+    def detect_errors(self, image_path, conf_threshold=0.25):
+        """
+        Детекция ошибок на чертеже
+
+        Args:
+            image_path: путь к изображению
+            conf_threshold: порог уверенности (0.0-1.0)
+
+        Returns:
+            list: список найденных ошибок
+        """
+        print(f"🔍 Анализ: {os.path.basename(image_path)}")
+
+        # Запускаем inference
+        results = self.model(image_path, conf=conf_threshold, verbose=False)[0]
+
         errors = []
+        for box in results.boxes:
+            class_id = int(box.cls[0])
+            confidence = float(box.conf[0])
+            bbox = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
 
-        # 1. Проверка основной надписи
-        errors.extend(self._check_stamp(image))
+            error_info = self.class_to_error.get(class_id, {})
 
-        # 2. Проверка технических требований
-        errors.extend(self._check_technical_requirements(image))
-
-        # 3. Проверка размеров и допусков
-        errors.extend(self._check_dimensions(image))
-
-        # 4. Проверка обозначений
-        errors.extend(self._check_designations(image))
-
-        return errors
-
-    def _check_stamp(self, image):
-        """Проверка основной надписи"""
-        errors = []
-        h, w = image.shape[:2]
-
-        # Вырезаем область штампа (правый нижний угол)
-        stamp_region = image[int(h * 0.85):h, int(w * 0.70):w]
-
-        # OCR для извлечения кода документа
-        text_results = self.ocr_reader.readtext(stamp_region)
-
-        # Проверка наличия кода (СБ, Э5, и т.д.)
-        codes = ['СБ', 'ВО', 'ТЧ', 'ГЧ', 'МЭ', 'Э1', 'Э2', 'Э3', 'Э4', 'Э5']
-        found_code = False
-
-        for (bbox, text, prob) in text_results:
-            if any(code in text for code in codes):
-                found_code = True
-                break
-
-        if not found_code:
             errors.append({
-                'type': 'missing_document_code',
-                'severity': 'critical',
-                'location': 'stamp'
-            })
-
-        return errors
-
-    def _check_technical_requirements(self, image):
-        """Проверка расположения технических требований"""
-        errors = []
-        h, w = image.shape[:2]
-
-        # Ищем текст "Технические требования" или просто нумерацию "1. 2. 3."
-        tt_region = image[int(h * 0.5):int(h * 0.85), int(w * 0.70):w]
-
-        text_results = self.ocr_reader.readtext(tt_region)
-
-        # Проверка ширины блока (должна быть ~185мм = ~25% ширины)
-        for (bbox, text, prob) in text_results:
-            if 'требования' in text.lower() or text.strip().startswith('1.'):
-                x_min = min(pt[0] for pt in bbox)
-                x_max = max(pt[0] for pt in bbox)
-                width_ratio = (x_max - x_min) / w
-
-                if width_ratio > 0.30:  # Больше 30% ширины
-                    errors.append({
-                        'type': 'wrong_tt_width',
-                        'severity': 'medium',
-                        'location': bbox
-                    })
-
-        return errors
-
-    def _check_dimensions(self, image):
-        """Проверка размеров в зоне 30°"""
-        errors = []
-
-        # Детекция линий
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 100, minLineLength=50, maxLineGap=10)
-
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                angle = np.abs(np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi)
-
-                # Зона 30° (25-35°)
-                if 25 <= angle <= 35:
-                    # Проверка наличия полки (горизонтальная линия в конце)
-                    has_shelf = self._detect_dimension_shelf(image, x2, y2)
-
-                    if not has_shelf:
-                        errors.append({
-                            'type': 'dimension_30deg_violation',
-                            'severity': 'medium',
-                            'location': [x1, y1, x2, y2]
-                        })
-
-        return errors
-
-    def _check_designations(self, image):
-        """Проверка буквенных обозначений и звездочек"""
-        errors = []
-
-        # OCR всего изображения
-        text_results = self.ocr_reader.readtext(image)
-
-        # Поиск звездочек
-        asterisks_found = sum(1 for (_, text, _) in text_results if '*' in text)
-
-        if asterisks_found == 0:
-            errors.append({
-                'type': 'missing_asterisks',
-                'severity': 'low',
+                'type': error_info.get('type', 'unknown'),
+                'severity': error_info.get('severity', 'medium'),
+                'description': error_info.get('description', ''),
+                'confidence': round(confidence, 3),
+                'bbox': {
+                    'x': int(bbox[0]),
+                    'y': int(bbox[1]),
+                    'width': int(bbox[2] - bbox[0]),
+                    'height': int(bbox[3] - bbox[1])
+                },
                 'location': 'drawing'
             })
 
+        print(f"   Найдено ошибок: {len(errors)}")
         return errors
 
-    def _load_stamp_classifier(self):
-        """Загрузка классификатора штампа"""
-        # Пока заглушка, потом можно обучить отдельную модель
-        return None
+    def visualize_errors(self, image_path, output_path='result.png', conf_threshold=0.25):
+        """
+        Визуализация найденных ошибок
+        """
+        results = self.model(image_path, conf=conf_threshold)[0]
+        annotated = results.plot()  # Автоматическая аннотация
+        cv2.imwrite(output_path, annotated)
+        print(f"✅ Визуализация сохранена: {output_path}")
+        return output_path
 
-    def _detect_dimension_shelf(self, image, x, y, radius=30):
-        """Проверка наличия полки у размерной линии"""
-        h, w = image.shape[:2]
 
-        # Вырезаем область вокруг конца размерной линии
-        x1 = max(0, x - radius)
-        y1 = max(0, y - radius)
-        x2 = min(w, x + radius)
-        y2 = min(h, y + radius)
+# Тестирование
+if __name__ == '__main__':
+    import sys
 
-        region = image[y1:y2, x1:x2]
+    if not os.path.exists('models/best.pt'):
+        print("❌ Модель не найдена!")
+        print("💡 Сначала обучите модель: python train_yolo.py")
+        sys.exit(1)
 
-        # Ищем горизонтальные линии (полка)
-        gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 20, minLineLength=10, maxLineGap=5)
+    # Тестируем детектор
+    detector = GOSTErrorDetector()
 
-        if lines is not None:
-            for line in lines:
-                x1_line, y1_line, x2_line, y2_line = line[0]
-                angle = abs(np.arctan2(y2_line - y1_line, x2_line - x1_line) * 180 / np.pi)
+    # Найдём тестовое изображение
+    test_images = [
+        'data/dataset/val/images',
+        'data/generated_errors/images'
+    ]
 
-                # Если линия почти горизонтальная (±10°)
-                if angle < 10 or angle > 170:
-                    return True
+    test_img = None
+    for folder in test_images:
+        if os.path.exists(folder):
+            imgs = [f for f in os.listdir(folder) if f.endswith('.png')]
+            if imgs:
+                test_img = os.path.join(folder, imgs[0])
+                break
 
-        return False
+    if test_img:
+        print(f"\n🧪 Тест на изображении: {test_img}\n")
+        errors = detector.detect_errors(test_img, conf_threshold=0.3)
+
+        if errors:
+            print(f"\n❌ Найдено {len(errors)} ошибок:")
+            for i, err in enumerate(errors, 1):
+                print(f"   {i}. {err['type']} ({err['severity']}) - уверенность: {err['confidence']:.1%}")
+        else:
+            print("\n✅ Ошибок не обнаружено")
+
+        # Визуализация
+        detector.visualize_errors(test_img, 'test_result.png')
+    else:
+        print("⚠️  Тестовые изображения не найдены")
