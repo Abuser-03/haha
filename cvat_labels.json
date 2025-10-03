@@ -1,0 +1,13 @@
+{
+  "labels": [
+    {"name": "missing_stamp", "color": "#FF0000", "type": "rectangle"},
+    {"name": "wrong_document_code", "color": "#FF6600", "type": "rectangle"},
+    {"name": "code_name_mismatch", "color": "#FF9900", "type": "rectangle"},
+    {"name": "wrong_tt_position", "color": "#FFCC00", "type": "rectangle"},
+    {"name": "missing_letter_designation", "color": "#99FF00", "type": "rectangle"},
+    {"name": "missing_asterisks", "color": "#00FF00", "type": "points"},
+    {"name": "dimension_30deg_violation", "color": "#00FFFF", "type": "polyline"},
+    {"name": "missing_tolerance_arrow", "color": "#0099FF", "type": "rectangle"},
+    {"name": "missing_general_roughness", "color": "#9900FF", "type": "rectangle"}
+  ]
+}
