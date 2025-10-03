@@ -1,0 +1,57 @@
+# Web Framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.0.1
+
+# Database
+SQLAlchemy==2.0.23
+
+# PDF Processing
+pdf2image==1.16.3
+Pillow==10.1.0
+
+# Computer Vision
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+numpy==1.24.3
+
+# OCR
+pytesseract==0.3.10
+easyocr==1.7.0
+
+# Object Detection
+ultralytics==8.0.196
+
+# Deep Learning
+torch==2.1.0
+torchvision==0.16.0
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Image Processing
+scipy==1.11.4
+scikit-image==0.22.0
+
+# Utilities
+tqdm==4.66.1
+PyYAML==6.0.1
+
+
+#на будущее пока
+
+
+# Async processing
+celery==5.3.4
+redis==5.0.1
+
+# API Documentation
+flask-swagger-ui==4.11.1
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+
+# Logging
+loguru==0.7.2
+
+# Configuration
+python-dotenv==1.0.0
