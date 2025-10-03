@@ -135,3 +135,36 @@ class GOSTErrorDetector:
             })
 
         return errors
+
+    def _load_stamp_classifier(self):
+        """Загрузка классификатора штампа"""
+        # Пока заглушка, потом можно обучить отдельную модель
+        return None
+
+    def _detect_dimension_shelf(self, image, x, y, radius=30):
+        """Проверка наличия полки у размерной линии"""
+        h, w = image.shape[:2]
+
+        # Вырезаем область вокруг конца размерной линии
+        x1 = max(0, x - radius)
+        y1 = max(0, y - radius)
+        x2 = min(w, x + radius)
+        y2 = min(h, y + radius)
+
+        region = image[y1:y2, x1:x2]
+
+        # Ищем горизонтальные линии (полка)
+        gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 20, minLineLength=10, maxLineGap=5)
+
+        if lines is not None:
+            for line in lines:
+                x1_line, y1_line, x2_line, y2_line = line[0]
+                angle = abs(np.arctan2(y2_line - y1_line, x2_line - x1_line) * 180 / np.pi)
+
+                # Если линия почти горизонтальная (±10°)
+                if angle < 10 or angle > 170:
+                    return True
+
+        return False

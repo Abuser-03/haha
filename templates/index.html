@@ -86,12 +86,23 @@
 
         <h2>📋 Загруженные файлы:</h2>
         <ul id="fileList">
-            {% for file in files %}
-                <li>
-                    <a href="{{ url_for('uploaded_file', filename=file.filename) }}" target="_blank">{{ file.filename }}</a>
-                </li>
-            {% endfor %}
-        </ul>
+    {% for file in files %}
+        <li>
+            <a href="{{ url_for('uploaded_file', filename=file.filename) }}" target="_blank">
+                {{ file.filename }}
+            </a>
+            <span style="color: {% if file.status == 'completed' %}green{% elif file.status == 'error' %}red{% else %}orange{% endif %}">
+                [{{ file.status }}]
+            </span>
+            {% if file.errors_found %}
+                <span style="color: red;">⚠️ {{ file.errors_found }} ошибок</span>
+            {% endif %}
+            <button onclick="checkFile({{ file.id }})" style="margin-left: 10px;">
+                🔍 Проверить
+            </button>
+        </li>
+    {% endfor %}
+</ul>
     </div>
 
     <script>
@@ -112,6 +123,23 @@
                 alert('❌ Ошибка: ' + result.error);
             }
         };
+
+        async function checkFile(fileId) {
+    if (!confirm('Начать проверку чертежа?')) return;
+
+    const response = await fetch(`/check/${fileId}`, {
+        method: 'POST'
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+        alert(`✅ Проверка завершена!\nНайдено ошибок: ${result.errors_count}`);
+        location.reload();
+    } else {
+        alert('❌ Ошибка: ' + result.error);
+    }
+}
     </script>
 </body>
 </html>
