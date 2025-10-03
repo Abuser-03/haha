@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты проверки - {{ file.filename }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #007BFF;
+            padding-bottom: 15px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card.critical { background-color: #f8d7da; color: #721c24; }
+        .stat-card.high { background-color: #fff3cd; color: #856404; }
+        .stat-card.medium { background-color: #d1ecf1; color: #0c5460; }
+        .stat-card.low { background-color: #d4edda; color: #155724; }
+        .stat-number { font-size: 32px; font-weight: bold; }
+        .stat-label { font-size: 14px; margin-top: 5px; }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+        }
+        .image-container {
+            position: relative;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #drawing {
+            width: 100%;
+            display: block;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .errors-list {
+            overflow-y: auto;
+            max-height: 800px;
+        }
+        .error-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .error-item:hover {
+            background-color: #f8f9fa;
+        }
+        .error-item.critical { border-color: #dc3545; background-color: #fff5f5; }
+        .error-item.high { border-color: #ffc107; background-color: #fffdf0; }
+        .error-item.medium { border-color: #17a2b8; background-color: #f0f9ff; }
+        .error-item.low { border-color: #28a745; background-color: #f0fff4; }
+        .error-type { font-weight: bold; margin-bottom: 5px; }
+        .error-desc { font-size: 14px; color: #666; margin-bottom: 8px; }
+        .error-rec { font-size: 13px; color: #007BFF; }
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #6c757d;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .back-btn:hover {
+            background-color: #545b62;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Результаты проверки</h1>
+                <p>Файл: <strong>{{ file.filename }}</strong></p>
+                <p>Проверено: {{ analysis.checked_at.strftime('%d.%m.%Y %H:%M') }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('index') }}" class="back-btn">← Назад</a>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card critical">
+                <div class="stat-number">{{ analysis.critical_errors }}</div>
+                <div class="stat-label">Критичные</div>
+            </div>
+            <div class="stat-card high">
+                <div class="stat-number">{{ analysis.high_errors }}</div>
+                <div class="stat-label">Высокие</div>
+            </div>
+            <div class="stat-card medium">
+                <div class="stat-number">{{ analysis.medium_errors }}</div>
+                <div class="stat-label">Средние</div>
+            </div>
+            <div class="stat-card low">
+                <div class="stat-number">{{ analysis.low_errors }}</div>
+                <div class="stat-label">Низкие</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="image-container">
+                <img id="drawing" src="{{ url_for('uploaded_file', filename=file.filename) }}" alt="Чертёж">
+                <canvas id="overlay"></canvas>
+            </div>
+
+            <div class="errors-list">
+                <h2>Найденные ошибки ({{ errors|length }})</h2>
+                {% if errors %}
+                    {% for error in errors %}
+                    <div class="error-item {{ error.severity }}" data-error-id="{{ error.id }}">
+                        <div class="error-type">{{ error.error_type }}</div>
+                        <div class="error-desc">{{ error.description }}</div>
+                        <div class="error-rec">💡 {{ error.recommendation }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="color: green; text-align: center; padding: 20px;">
+                        ✅ Ошибок не обнаружено!
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const errors = {{ errors | tojson }};
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const img = document.getElementById('drawing');
+
+        const colors = {
+            'critical': '#dc3545',
+            'high': '#ffc107',
+            'medium': '#17a2b8',
+            'low': '#28a745'
+        };
+
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            errors.forEach(err => {
+                if (err.bbox_x !== null) {
+                    ctx.strokeStyle = colors[err.severity] || '#666';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(err.bbox_x, err.bbox_y, err.bbox_width, err.bbox_height);
+
+                    // Номер ошибки
+                    ctx.fillStyle = colors[err.severity];
+                    ctx.font = 'bold 16px Arial';
+                    ctx.fillText(`${err.id}`, err.bbox_x - 5, err.bbox_y - 5);
+                }
+            });
+        };
+
+        // Подсветка bbox при наведении на ошибку
+        document.querySelectorAll('.error-item').forEach(item => {
+            item.addEventListener('mouseenter', function() {
+                const errorId = parseInt(this.dataset.errorId);
+                const error = errors.find(e => e.id === errorId);
+
+                if (error && error.bbox_x !== null) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // Перерисовываем все bbox
+                    errors.forEach(err => {
+                        if (err.bbox_x !== null) {
+                            ctx.strokeStyle = colors[err.severity];
+                            ctx.lineWidth = err.id === errorId ? 5 : 2;
+                            ctx.strokeRect(err.bbox_x, err.bbox_y, err.bbox_width, err.bbox_height);
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
